@@ -58,6 +58,7 @@ const holdercWBTC = '0x7132ad0a72b5ba50bdaa005fad19caae029ae699'
 const holderWETH = '0xf04a5cc80b1e94c69b48f5ee68a08cd2f09a7c3e'
 const holdercETH = '0x10d88638be3c26f3a47d861b8b5641508501035d'
 const holderEURT = '0x5754284f345afc66a98fbb0a0afe71e0f007b949'
+const holderCbETH = '0xBe9895146f7AF43049ca1c1AE358B0541Ea49704'
 
 const NO_PRICE_DATA_FEED = '0x51597f405303C4377E36123cBc172b13269EA163'
 
@@ -117,6 +118,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
   let weth: ERC20Mock
   let cETH: CTokenMock
   let eurt: ERC20Mock
+  let cbETH: ERC20Mock
 
   let daiCollateral: FiatCollateral
   let usdcCollateral: FiatCollateral
@@ -141,6 +143,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
   let wethCollateral: SelfReferentialCollateral
   let cETHCollateral: CTokenSelfReferentialCollateral
   let eurtCollateral: EURFiatCollateral
+  let cbETHCollateral: SelfReferentialCollateral
 
   // Contracts to retrieve after deploy
   let rToken: TestIRToken
@@ -225,7 +228,8 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
       weth = <ERC20Mock>erc20s[17] // wETH
       cETH = <CTokenMock>erc20s[18] // cETH
       eurt = <ERC20Mock>erc20s[19] // eurt
-
+      cbETH = <ERC20Mock>erc20s[20] // cbETH
+    
       // Get plain aTokens
       aDai = <IAToken>(
         await ethers.getContractAt(
@@ -280,7 +284,8 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
       wethCollateral = <SelfReferentialCollateral>collateral[17] // wETH
       cETHCollateral = <CTokenSelfReferentialCollateral>collateral[18] // cETH
       eurtCollateral = <EURFiatCollateral>collateral[19] // EURT
-
+      cbETHCollateral = <SelfReferentialCollateral>collateral[20] // cbETH
+    
       // Get assets and tokens for default basket
       daiCollateral = <FiatCollateral>basket[0]
       aDaiCollateral = <ATokenFiatCollateral>basket[1]
@@ -354,6 +359,11 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         await eurt
           .connect(eurtSigner)
           .transfer(addr1.address, toBNDecimals(initialBalBtcEth, 6).mul(1000))
+      })
+
+      // cbETH
+      await whileImpersonating(holderCbETH, async (cbETHSigner) => {
+        await cbETH.connect(cbETHSigner).transfer(addr1.address, initialBalBtcEth)
       })
 
       // Setup factories
@@ -799,6 +809,14 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
           price: fp('1859'), //approx price June 2022
           targetName: 'ETH',
         },
+        {
+          selfRefToken: cbETH,
+          selfRefTokenDecimals: 18,
+          selfRefTokenAddress: networkConfig[chainId  ].tokens.cbETH || '',
+          selfRefTokenCollateral: cbETHCollateral,
+          price: fp('1859'), //approx price June 2022
+          targetName: 'cbETH',
+        }
       ]
 
       for (const tkInf of tokenInfos) {
@@ -1922,8 +1940,9 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
           wethCollateral,
           cETHCollateral,
           eurtCollateral,
+          cbETHCollateral
         ]
-        newBasketsNeededAmts = [fp('1'), fp('1'), fp('1'), fp('1'), fp('1000')]
+        newBasketsNeededAmts = [fp('1'), fp('1'), fp('1'), fp('1'), fp('1000'), fp('1')]
 
         // Register prime collateral and grant allowances
         const newBasketERC20s = []
@@ -1943,6 +1962,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         await weth.connect(addr1).approve(rToken.address, await weth.balanceOf(addr1.address))
         await cETH.connect(addr1).approve(rToken.address, await cETH.balanceOf(addr1.address))
         await eurt.connect(addr1).approve(rToken.address, await eurt.balanceOf(addr1.address))
+        await cbETH.connect(addr1).approve(rToken.address, await cbETH.balanceOf(addr1.address))
       })
 
       it('Should Issue/Redeem (wBTC, cWBTC, wETH, cETH, EURT)', async () => {
@@ -1972,8 +1992,12 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         const eurPrice = fp('1.07') // approx price EUR-USD June 6, 2022
         expect(await eurtCollateral.strictPrice()).to.be.closeTo(eurPrice, fp('0.01')) // ref price approx 1.07
 
+        // cbETH
+        const cbETHTargetPrice = fp('1859') //approx price June 2022
+        expect(await cbETHCollateral.strictPrice()).to.be.closeTo(cbETHTargetPrice, fp('0.5'))
+
         // Aproximate total price of Basket in USD
-        const totalPriceUSD = btcPrice.mul(2).add(ethTargetPrice.mul(2)).add(eurPrice.mul(1000))
+        const totalPriceUSD = btcPrice.mul(2).add(ethTargetPrice.mul(3)).add(eurPrice.mul(1000))
 
         // Check Basket
         expect(await basketHandler.fullyCollateralized()).to.equal(true)
@@ -1983,7 +2007,8 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         expect(backing[2]).to.equal(weth.address)
         expect(backing[3]).to.equal(cETH.address)
         expect(backing[4]).to.equal(eurt.address)
-        expect(backing.length).to.equal(5)
+        expect(backing[5]).to.equal(cbETH.address)
+        expect(backing.length).to.equal(6)
 
         // Check initial values
         expect(await basketHandler.nonce()).to.be.gt(bn(0))
@@ -2009,6 +2034,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         expect(await weth.balanceOf(backingManager.address)).to.equal(0)
         expect(await cETH.balanceOf(backingManager.address)).to.equal(0)
         expect(await eurt.balanceOf(backingManager.address)).to.equal(0)
+        expect(await cbETH.balanceOf(backingManager.address)).to.equal(0)
 
         expect(await wbtc.balanceOf(addr1.address)).to.equal(toBNDecimals(initialBalBtcEth, 8))
         expect(await cWBTC.balanceOf(addr1.address)).to.equal(
@@ -2021,6 +2047,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         expect(await eurt.balanceOf(addr1.address)).to.equal(
           toBNDecimals(initialBalBtcEth, 6).mul(1000)
         )
+        expect(await cbETH.balanceOf(addr1.address)).to.equal(initialBalBtcEth)
 
         // Issue one RToken
         const issueAmount: BigNumber = bn('1e18')
@@ -2040,6 +2067,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
           point1Pct(requiredCETH)
         )
         expect(await eurt.balanceOf(backingManager.address)).to.equal(bn(1000e6))
+        expect(await cbETH.balanceOf(backingManager.address)).to.equal(issueAmount) //1 full units
 
         // Balances for user
         expect(await wbtc.balanceOf(addr1.address)).to.equal(
@@ -2059,6 +2087,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         expect(await eurt.balanceOf(addr1.address)).to.equal(
           toBNDecimals(initialBalBtcEth.mul(1000).sub(issueAmount.mul(1000)), 6)
         )
+        expect(await cbETH.balanceOf(addr1.address)).to.equal(initialBalBtcEth.sub(issueAmount))
 
         // Check RTokens issued to user
         expect(await rToken.balanceOf(addr1.address)).to.equal(issueAmount)
@@ -2084,6 +2113,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         expect(await weth.balanceOf(backingManager.address)).to.equal(0)
         expect(await cETH.balanceOf(backingManager.address)).to.be.closeTo(bn(0), bn('10'))
         expect(await eurt.balanceOf(backingManager.address)).to.equal(0)
+        expect(await cbETH.balanceOf(backingManager.address)).to.equal(0)
 
         // Check funds returned to user
         expect(await wbtc.balanceOf(addr1.address)).to.equal(toBNDecimals(initialBalBtcEth, 8))
@@ -2099,6 +2129,7 @@ describeFork(`Asset Plugins - Integration - Mainnet Forking P${IMPLEMENTATION}`,
         expect(await eurt.balanceOf(addr1.address)).to.equal(
           toBNDecimals(initialBalBtcEth, 6).mul(1000)
         )
+        expect(await cbETH.balanceOf(addr1.address)).to.equal(initialBalBtcEth)
 
         //  Check asset value left
         expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.be.closeTo(
