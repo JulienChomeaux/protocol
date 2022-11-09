@@ -566,7 +566,7 @@ async function collateralFixture(
   )
 
   const cbETH = await makeSelfReferentialCollateral(
-    networkConfig[chainId].tokens.cbETH as string,
+    networkConfig[chainId].tokens.usdc as string,
     networkConfig[chainId].chainlinkFeeds.cbETH as string,
     'cbETH'
   )
