@@ -565,6 +565,12 @@ async function collateralFixture(
     'EURO'
   )
 
+  const cbETH = await makeSelfReferentialCollateral(
+    networkConfig[chainId].tokens.cUSDC as string,
+    networkConfig[chainId].chainlinkFeeds.cbETH as string,
+    'cbETH'
+  )
+
   const erc20s = [
     dai[0],
     usdc[0],
@@ -586,6 +592,7 @@ async function collateralFixture(
     weth[0],
     cETH[0],
     eurt[0],
+    cbETH[0]
   ]
   const collateral = [
     dai[1],
@@ -608,6 +615,7 @@ async function collateralFixture(
     weth[1],
     cETH[1],
     eurt[1],
+    cbETH[1]
   ]
 
   // Create the initial basket
